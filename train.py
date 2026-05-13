@@ -63,6 +63,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter += 1
     bg = torch.rand((3), device="cuda") if opt.random_background else background
 
+    # --- 【追加①】EMAベースのEarly Stopping用の履歴リスト ---
+    loss_history = []
+    # ---------------------------------------------
+
     for iteration in range(first_iter, opt.iterations + 1):
 
         if websockets:
@@ -113,6 +117,22 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 progress_bar.update(10)
             if iteration == opt.iterations:
                 progress_bar.close()
+
+            # --- 【追加②】EMAベースのEarly Stopping ---
+            if iteration % 100 == 0:
+                loss_history.append(ema_loss_for_log)
+
+                # 20回分（2000イテレーション）の履歴でトレンドを判定
+                if len(loss_history) > 20:
+                    past_loss = loss_history.pop(0)
+                    current_loss = loss_history[-1]
+
+                    # 2000イテレーション前との差分が0.0005未満なら収束とみなす
+                    if (past_loss - current_loss) > 0 and (past_loss - current_loss) < 0.0005:
+                        if iteration < opt.densify_until_iter:
+                            print(f"\n[Early Stop] densification stopped at iter {iteration} (EMA loss stagnated: {past_loss:.5f} -> {current_loss:.5f})")
+                        opt.densify_until_iter = min(opt.densify_until_iter, iteration)
+            # ---------------------------------------------
 
             iter_time = iter_start.elapsed_time(iter_end)
             # Log and save
