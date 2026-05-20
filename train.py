@@ -62,6 +62,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
     bg = torch.rand((3), device="cuda") if opt.random_background else background
+    loss_history = []
 
     for iteration in range(first_iter, opt.iterations + 1):
 
@@ -113,6 +114,18 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 progress_bar.update(10)
             if iteration == opt.iterations:
                 progress_bar.close()
+
+            if iteration % 100 == 0:
+                loss_history.append(ema_loss_for_log)
+
+                if len(loss_history) > 20:
+                    past_loss = loss_history.pop(0)
+                    current_loss = loss_history[-1]
+
+                    if (past_loss - current_loss) > 0 and (past_loss - current_loss) < 0.0005:
+                        if iteration < opt.densify_until_iter:
+                            print(f"\n[Early Stop] densification stopped at iter {iteration} (EMA loss stagnated: {past_loss:.5f} -> {current_loss:.5f})")
+                        opt.densify_until_iter = min(opt.densify_until_iter, iteration)
 
             iter_time = iter_start.elapsed_time(iter_end)
             # Log and save
