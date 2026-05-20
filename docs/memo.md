@@ -202,3 +202,68 @@ os.environ['PATH'] += ":/root/.cargo/bin"
 いきなり複雑な計算をC++に移すのではなく、まずは「入ってきたテンソルの形（Shape）や要素数を `std::cout` で出力して、ダミーのゼロテンソルをそのまま返すだけ」の処理を書き、PythonからC++へ正しくデータが渡っているかを確認する（疎通確認）ところから始めると確実です。
 
 `fast_utils.py` の `compute_gaussian_score_fastgs` 内部にある具体的なPythonの数式やループ処理があれば、それを**C++ (ATen API) のコードへ翻訳**することも可能ですので、枠組みができたら実際の処理の中身も確認していきましょう！
+
+---
+
+## 実装済み: Rust 拡張の初期 scaffold
+
+このリポジトリには、Rust 実装を進めるための最小構成として `csrc_rust/` を追加済みです。
+
+追加ファイル:
+
+- `csrc_rust/Cargo.toml`
+- `csrc_rust/pyproject.toml`
+- `csrc_rust/src/lib.rs`
+- `csrc_rust/README.md`
+
+現時点では `tch`/libtorch へ直接リンクせず、PyO3 経由で Python の `torch.Tensor` オブジェクトを受け取る構成です。FastGS の環境は Python 3.7 + PyTorch 1.12.1 系なので、最初から `tch` を入れると libtorch 互換バージョンで詰まりやすいためです。まずは Rust 拡張として build/import できる境界を作り、その後 `src/lib.rs` の中身を直接 tensor 実装へ置き換えるのが安全です。
+
+提供 API:
+
+- `fastgs_rust.normalize_score(score)`
+- `fastgs_rust.average_counts(counts, num_views)`
+- `fastgs_rust.compute_scores_from_accumulators(accum_metric_counts, photometric_losses, densify)`
+- `fastgs_rust.extension_info()`
+
+ビルド:
+
+```bash
+cd /Users/somomma/ghq/github.com/tomoka-i/FastGS/csrc_rust
+cargo check
+pip install maturin
+maturin develop --release
+```
+
+Colab では先に Rust を入れます。
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+疎通確認:
+
+```bash
+python - <<'PY'
+import torch
+import fastgs_rust
+
+counts = [torch.tensor([1, 2, 3]), torch.tensor([2, 2, 6])]
+losses = [torch.tensor(0.5), torch.tensor(1.0)]
+importance, pruning = fastgs_rust.compute_scores_from_accumulators(counts, losses, True)
+print(importance)
+print(pruning)
+print(fastgs_rust.extension_info())
+PY
+```
+
+次に Rust 化する対象は、`utils/fast_utils.py` の `compute_gaussian_score_fastgs` 内にある以下の集約処理です。
+
+```python
+full_metric_counts += accum_loss_counts
+full_metric_score += photometric_loss * accum_loss_counts
+pruning_score = (full_metric_score - torch.min(full_metric_score)) / (torch.max(full_metric_score) - torch.min(full_metric_score))
+importance_score = torch.div(full_metric_counts, len(camlist), rounding_mode='floor')
+```
+
+レンダリング自体は `render_fastgs` の CUDA 拡張に依存しているため、Rust 側へ移すよりも、まずこの score accumulation 境界から置き換えるのが現実的です。

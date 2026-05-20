@@ -1,0 +1,11 @@
+[package]
+name = "fastgs_rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "fastgs_rust"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.19.2", features = ["extension-module"] }
