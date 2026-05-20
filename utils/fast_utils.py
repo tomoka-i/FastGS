@@ -85,11 +85,12 @@ def compute_gaussian_score_fastgs(camlist, gaussians, pipe, bg, args, DENSIFY = 
 
         accum_loss_counts = render_pkg["accum_metric_counts"]
 
-        if DENSIFY:
-            if full_metric_counts is None:
-                full_metric_counts = accum_loss_counts.clone()
-            else:
-                full_metric_counts += accum_loss_counts
+        accum_loss_counts = accum_loss_counts.to(dtype=torch.float32)
+
+        if full_metric_counts is None:
+            full_metric_counts = accum_loss_counts.clone()
+        else:
+            full_metric_counts += accum_loss_counts
 
         if full_metric_score is None:
             full_metric_score = photometric_loss * accum_loss_counts.clone()
@@ -99,10 +100,15 @@ def compute_gaussian_score_fastgs(camlist, gaussians, pipe, bg, args, DENSIFY = 
     # ループが終わった後の処理をオフロード
     import fastgs_cuda
 
+    metric_score = full_metric_score.detach().to(dtype=torch.float32).contiguous()
+    metric_counts = full_metric_counts.detach().to(
+        device=metric_score.device, dtype=torch.float32
+    ).contiguous()
+
     # 既存の正規化処理の代わりにCUDAカーネルを呼び出す
     importance_score, pruning_score = fastgs_cuda.compute_final_score(
-        full_metric_score.detach().contiguous(),
-        full_metric_counts.detach().contiguous() if full_metric_counts is not None else None,
+        metric_score,
+        metric_counts,
         DENSIFY
     )
 
