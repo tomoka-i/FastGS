@@ -9,28 +9,35 @@ __global__ void compute_final_score_kernel(
     float* importance,
     float* pruning,
     int N,
-    bool densify) 
+    int num_views,
+    float min_score,
+    float score_range,
+    bool densify)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= N) return;
 
-    // スコアの計算（元のコードの正規化ロジックを並列化）
-    float counts = metric_counts[idx];
-    float score = (counts > 0) ? (metric_score[idx] / counts) : 0.0f;
-
-    importance[idx] = score;
-    pruning[idx] = densify ? score * 0.5f : score * 1.5f;
+    // Match the original Python logic:
+    // pruning_score = (full_metric_score - min) / (max - min)
+    // importance_score = floor(full_metric_counts / len(camlist))
+    pruning[idx] = (metric_score[idx] - min_score) / score_range;
+    importance[idx] = densify ? floorf(metric_counts[idx] / num_views) : 0.0f;
 }
 
 // C++ラッパー
 std::tuple<torch::Tensor, torch::Tensor> compute_final_score_cuda(
     torch::Tensor metric_score,
     torch::Tensor metric_counts,
+    int num_views,
     bool densify) 
 {
-    int N = metric_score.size(0);
-    auto importance = torch::zeros({N, 1}, metric_score.options());
-    auto pruning = torch::zeros({N, 1}, metric_score.options());
+    int N = metric_score.numel();
+    auto importance = torch::zeros_like(metric_score);
+    auto pruning = torch::zeros_like(metric_score);
+
+    float min_score = metric_score.min().item<float>();
+    float max_score = metric_score.max().item<float>();
+    float score_range = max_score - min_score;
 
     dim3 block(256);
     dim3 grid((N + block.x - 1) / block.x);
@@ -41,6 +48,9 @@ std::tuple<torch::Tensor, torch::Tensor> compute_final_score_cuda(
         importance.data_ptr<float>(),
         pruning.data_ptr<float>(),
         N,
+        num_views,
+        min_score,
+        score_range,
         densify
     );
 

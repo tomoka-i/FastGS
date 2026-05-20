@@ -109,6 +109,7 @@ def compute_gaussian_score_fastgs(camlist, gaussians, pipe, bg, args, DENSIFY = 
     importance_score, pruning_score = fastgs_cuda.compute_final_score(
         metric_score,
         metric_counts,
+        len(camlist),
         DENSIFY
     )
 
