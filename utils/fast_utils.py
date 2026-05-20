@@ -69,6 +69,7 @@ def compute_gaussian_score_fastgs(camlist, gaussians, pipe, bg, args, DENSIFY = 
 
     full_metric_counts = None
     full_metric_score = None
+    import fastgs_cuda
 
     for view in range(len(camlist)):
         my_viewpoint_cam = camlist[view]
@@ -77,9 +78,11 @@ def compute_gaussian_score_fastgs(camlist, gaussians, pipe, bg, args, DENSIFY = 
 
         gt_image = my_viewpoint_cam.original_image.cuda()
         get_flag = True
-        l1_loss_norm = get_loss(render_image, gt_image)
-        
-        metric_map = (l1_loss_norm > args.loss_thresh).int()
+        metric_map = fastgs_cuda.compute_metric_map(
+            render_image.detach().to(dtype=torch.float32).contiguous(),
+            gt_image.detach().to(dtype=torch.float32).contiguous(),
+            args.loss_thresh,
+        )
 
         render_pkg = render_fastgs(my_viewpoint_cam, gaussians, pipe, bg, args.mult, get_flag = get_flag, metric_map = metric_map)
 
@@ -96,9 +99,6 @@ def compute_gaussian_score_fastgs(camlist, gaussians, pipe, bg, args, DENSIFY = 
             full_metric_score = photometric_loss * accum_loss_counts.clone()
         else:
             full_metric_score += photometric_loss * accum_loss_counts
-
-    # ループが終わった後の処理をオフロード
-    import fastgs_cuda
 
     metric_score = full_metric_score.detach().to(dtype=torch.float32).contiguous()
     metric_counts = full_metric_counts.detach().to(
