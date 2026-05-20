@@ -28,16 +28,16 @@ continues to work while Nix support is validated.
 
 - [ ] Confirm target Nix platform for training validation.
   - Recommended: Linux with NVIDIA driver and CUDA-capable GPU.
-- [ ] Decide whether Nix should manage PyTorch directly or provide a shell around
+- [x] Decide whether Nix should manage PyTorch directly or provide a shell around
       the existing Conda environment.
   - Recommended first step: Nix shell for tooling only.
-- [ ] Add `flake.nix` with a minimal dev shell.
+- [x] Add `flake.nix` with a minimal dev shell.
   - Include Rust toolchain.
   - Include `pkg-config`, C/C++ compiler, Python tooling, and `maturin`.
   - Keep CUDA/PyTorch as explicit follow-up work.
-- [ ] Add `.envrc` for `direnv` users.
+- [x] Add `.envrc` for `direnv` users.
   - Use `use flake` after the flake is stable.
-- [ ] Document bootstrap commands in `README.md` or a dedicated Nix doc.
+- [x] Document bootstrap commands in `README.md` or a dedicated Nix doc.
   - `nix develop`
   - `cargo check`
   - `maturin develop --release`
