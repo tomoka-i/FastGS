@@ -96,10 +96,14 @@ def compute_gaussian_score_fastgs(camlist, gaussians, pipe, bg, args, DENSIFY = 
         else:
             full_metric_score += photometric_loss * accum_loss_counts
 
-    pruning_score = (full_metric_score - torch.min(full_metric_score)) / (torch.max(full_metric_score) - torch.min(full_metric_score))
-    
-    if DENSIFY:
-        importance_score = torch.div(full_metric_counts, len(camlist), rounding_mode='floor')
-    else:
-        importance_score = None
+    # ループが終わった後の処理をオフロード
+    import fastgs_cuda
+
+    # 既存の正規化処理の代わりにCUDAカーネルを呼び出す
+    importance_score, pruning_score = fastgs_cuda.compute_final_score(
+        full_metric_score.detach().contiguous(),
+        full_metric_counts.detach().contiguous() if full_metric_counts is not None else None,
+        DENSIFY
+    )
+
     return importance_score, pruning_score
